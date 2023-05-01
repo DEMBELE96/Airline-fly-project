@@ -1,0 +1,217 @@
+---
+title: "Assignment(Exploratory analysis of Flight data)"
+author: "MD300-0006/2020-Adama Dembele  -------MD300-0001/2020 Mamadou Hady Barry"
+date: "10/10/2021"
+output: html_document
+---
+In this note we are analyzing $566,996$ observations data entries from the flights FAA data describing every commercial flight during the month of December 2009.The data comes from the Research and Innovation Technology Administration at the Bureau of Transportation statistics.
+# PERFORMANCE OF AIRLINE COMPAGNY 
+## Loading of data
+```{r}
+library(tidyr)
+library(dplyr)
+library(ggplot2)
+library(scales)
+library(highcharter)
+library(ggpubr)
+
+fly_data=read.csv("C:/Users/user/Documents/36169029_T_ONTIME.csv")
+fly_data=fly_data[,-c(27,31,32,33,34,35,36)]
+```
+##  Exploratory  Data Analysis
+Our objectives is to check which airlines compagny perform the most in terms of departure time, and less cancelled flight.
+### Understanding the data contains
+This dataset is composed by the following variables: \\
+```{r}
+colnames(fly_data)
+```
+```{r}
+head(fly_data,4)
+```
+## A. Data Preproccessing 
+### 1) Encoding categorical features
+```{r}
+fly_data$UNIQUE_CARRIER=factor(fly_data$UNIQUE_CARRIER)
+fly_data$ORIGIN_CITY_NAME=factor(fly_data$ORIGIN_CITY_NAME)
+fly_data$CANCELLED=ifelse(fly_data$CANCELLED==1,"Yes","No")
+fly_data$DAY_OF_WEEK[fly_data$DAY_OF_WEEK==1]="Monday"
+fly_data$DAY_OF_WEEK[fly_data$DAY_OF_WEEK==2]="Tuesday"
+fly_data$DAY_OF_WEEK[fly_data$DAY_OF_WEEK==3]="Wednesday"
+fly_data$DAY_OF_WEEK[fly_data$DAY_OF_WEEK==4]="Thursday"
+fly_data$DAY_OF_WEEK[fly_data$DAY_OF_WEEK==5]="Friday"
+fly_data$DAY_OF_WEEK[fly_data$DAY_OF_WEEK==6]="Saturday"
+fly_data$DAY_OF_WEEK[fly_data$DAY_OF_WEEK==7]="Sunday"
+```
+### 2) Checking missing values in dataset
+```{r}
+missing_check=function(dat){
+  sum(is.na(dat))
+}
+```
+```{r}
+apply(fly_data,2,missing_check)
+```
+```{r}
+library(Hmisc)
+dep_delay_impute=with(fly_data,impute(DEP_DELAY,mean))
+```
+
+```{r}
+fly_data["dep_delay_impute"]=dep_delay_impute
+```
+
+# B. Questions 
+
+## 1.When does airline cancellation happens?
+
+### 1.1 What is the most popular day of the week that most flight are cancelled?
+```{r  results = 'asis'}
+tbles=fly_data%>%group_by(DAY_OF_WEEK)%>%count(CANCELLED)%>%filter(CANCELLED=="Yes")%>%arrange(desc(cancelled_number_by_days=n))
+tables=as.data.frame(tbles[,c(1,3)])
+colnames(tables)=c("Day_of_Weeks","cancelled_number_by_days")
+knitr::kable(tables,caption = "Table of the number of airline cancellation days")
+```
+### 1.2 How likely a flight cancellation would happen?
+
+```{r}
+statistic_details=describe(fly_data)
+#statistic_details$CANCELLED$values
+
+```
+```{r}
+knitr::kable(as.data.frame(statistic_details$CANCELLED$values),caption = "Table of cancelled frequency")
+```
+probability_of_cancelled=$14730/514539=0.028$
+It is very unlikely because all of airline has  $0.028$ chance to have a flight cancelled. 
+
+### 1.3  What are the flight number cancelled and no cancelled by airline?
+```{r}
+cancel=fly_data%>%group_by(UNIQUE_CARRIER)%>%count(CANCELLED)%>%arrange(desc(CANCELLED_sum=n()))
+```
+The most common day for flight cancel is on Saturday.
+
+```{r}
+CANCELLED_fly=ggplot(cancel, aes(x = reorder(UNIQUE_CARRIER,n), y = n))+
+geom_bar(
+aes(color = CANCELLED, fill = CANCELLED),
+stat = "identity", position = position_dodge(0.3),
+width = 1
+)+
+  xlab("Flight Companies")+
+  ylab("Number of flight cancelled")+
+geom_point(
+aes(color = CANCELLED),
+position = position_dodge(0.4), size = 1.5
+)+labs(title = "Flight cancelled Counts by Airline Carriers")+
+  geom_text(
+aes(label = n, group = CANCELLED),
+position = position_dodge(0.9),
+vjust = -0.4, size = 2.4
+)+theme_set(theme_gray())
+CANCELLED_fly
+```
+The **MQ** airline has the most cancelled flights with $2167$ score and **WN** has the most no cancelled flight. 
+### 1.4 Why flight cancelled?
+We can not answer this question because the dataset don't allow it, many features which are related to explain that relationship, have too many missing values.
+## 2. When does airline delays happens?
+### 2.1 Which data in month has the most airline flight delays?
+```{r}
+fly_data$dep_delay_impute=ifelse(fly_data$dep_delay_impute>0,"Delay","No Delay")
+```
+```{r}
+month_day=fly_data%>%group_by(DAY_OF_MONTH)%>%count(dep_delay_impute)%>%filter(dep_delay_impute=="Delay")%>%arrange(desc(n))
+#ggplot(datas,aes(x=factor(DAY_OF_MONTH),y=n))+geom_bar()
+```
+```{r}
+ggplot(month_day, aes(x = reorder(factor(DAY_OF_MONTH),-n), y = n))+
+geom_bar(
+aes(color =factor(DAY_OF_MONTH) , fill =factor(DAY_OF_MONTH)),
+stat = "identity", position = position_dodge(0.3),
+width = 0.7                                      
+)+labs(x="DAY_OF_MONTH",y="data counts in month",title = " Day in month has the most airline flight delays")
+
+```
+
+The most common data in a month for flight delays is on 21nd day.
+
+
+### 2.3 Which airline has the most delay flights? 
+
+```{r}
+delay_days=fly_data%>%group_by(UNIQUE_CARRIER)%>%count(dep_delay_impute)%>%arrange(n())%>%mutate(Flight_proportion = round(n*100/sum(n), 1),
+lab.ypos = cumsum(Flight_proportion) - 0.5*Flight_proportion)
+head(delay_days,8)
+```
+
+
+
+```{r}
+delay_airline=delay_days%>%group_by(UNIQUE_CARRIER,Flight_proportion)%>%filter(dep_delay_impute=="Delay")%>%arrange(desc(Flight_proportion))
+head(delay_airline,5)
+Nodelay_airline=delay_days%>%group_by(UNIQUE_CARRIER,Flight_proportion)%>%filter(dep_delay_impute=="No Delay")%>%arrange(desc(Flight_proportion))
+```
+
+```{r}
+hc <- delay_airline%>%
+  hchart(
+    "bubble", hcaes(x =UNIQUE_CARRIER , y =Flight_proportion,size=Flight_proportion,color = 
+ Flight_proportion), maxSize = "20%"
+    )%>%
+  hc_xAxis(text="Airline company")%>%
+ hc_title(text ="Flight Delay Counts by Airline Carriers",
+ align = "center",
+ style = list(fontWeight = "bold", fontSize = "30px")) %>%
+  hc_legend(enabled = T)%>%
+ hc_tooltip(pointFormat='{point.y:.2f}%',enabled = T) %>% 
+ hc_subtitle(text = "By week during December 2009 in USA!",
+ align = "center",
+ style = list(fontWeight = "bold")) %>% 
+ hc_add_theme(hc_theme_ffx())
+hc
+```
+
+
+The **WN** airline has the most delay flights.
+
+
+### 2.2 The most delay day by flight airline
+```{r}
+day_delays=fly_data%>%group_by(UNIQUE_CARRIER,DAY_OF_WEEK)%>%count(dep_delay_impute)%>%filter(dep_delay_impute=="Delay")
+
+```
+```{r}
+most_delay_dayss=day_delays%>%group_by(UNIQUE_CARRIER)%>%filter(n==max(n))%>%arrange(desc(n))
+most_delay_days=ggplot(most_delay_dayss, aes(x =reorder(UNIQUE_CARRIER,-n), y = n))+
+geom_bar(
+aes(color = DAY_OF_WEEK, fill = DAY_OF_WEEK),stat = "identity", position = position_dodge(width=1),
+width = 0.9
+)+geom_text(
+aes(label = n),
+position = position_dodge(0.8),
+vjust = -0.4, size = 2.6
+)+
+  xlab("Flight Companies")+
+  ylab("Number of flight departure delay")+
+  labs(title = "The most delay day counts by flight airline")
+  
+most_delay_days
+
+```
+The **WN** airline has the most delay flights on **Wednesday**.
+### Which is the most Popular airline Carrier 2009?
+```{r}
+popular_fly=fly_data%>%group_by(UNIQUE_CARRIER)%>%count(counts=n())%>%arrange(desc(n))
+f=ggplot(popular_fly,aes(x=reorder(factor(UNIQUE_CARRIER),-n),y=n))+geom_bar(aes(color = UNIQUE_CARRIER, fill = UNIQUE_CARRIER),stat = "identity", position = position_dodge(width=1),
+width = 0.9)+labs("Airline carrier","Counts number carrier",title="2009 Most Popular Carrier in December")
+f
+```
+
+
+# Conclusion 
+ -In our analysis, the worst day for not traveling is Saturday, December and 21nd to travel and avoid **MQ** airline.
+ -Flight cancelation is very unlikely.
+ -The **WN** airline is the most efficient in terms of departure delays and no cancelled flight in December $2009$.
+
+
+
+
