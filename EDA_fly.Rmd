@@ -1,6 +1,6 @@
 ---
 title: "Assignment(Exploratory analysis of Flight data)"
-author: "MD300-0006/2020-Adama Dembele  -------MD300-0001/2020 Mamadou Hady Barry"
+author: "MD300-0006/2020-Adama Dembele 
 date: "10/10/2021"
 output: html_document
 ---
